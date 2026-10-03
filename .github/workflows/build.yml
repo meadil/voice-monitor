@@ -24,7 +24,11 @@ jobs:
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Build debug APK
-        run: ./gradlew --no-daemon assembleDebug
+        run: |
+          # Windows checkout loses the executable bit on gradlew
+          git update-index --chmod=+x gradlew || true
+          chmod +x gradlew
+          bash ./gradlew --no-daemon assembleDebug
 
       - uses: actions/upload-artifact@v4
         with:
