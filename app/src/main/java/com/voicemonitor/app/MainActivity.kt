@@ -95,7 +95,10 @@ class MainActivity : AppCompatActivity(), MonitorBus.Observer {
                 else -> "Listening — ${state.mode}"
             }
             binding.latency.text = if (state.running && state.actualSampleRate > 0) {
-                "buffer %.0f ms · %d Hz".format(state.bufferLatencyMs, state.actualSampleRate)
+                "buffer %.0f ms · %d Hz · gaps %d · trims %d".format(
+                    state.bufferLatencyMs, state.actualSampleRate,
+                    state.underruns, state.driftDrops
+                )
             } else {
                 "—"
             }

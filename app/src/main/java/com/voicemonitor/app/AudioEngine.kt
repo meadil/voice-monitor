@@ -35,6 +35,8 @@ class AudioEngine(private val ctx: Context) {
         val bufferLatencyMs: Float = 0f,
         val level: Float = 0f,
         val muted: Boolean = false,
+        val underruns: Int = 0,
+        val driftDrops: Int = 0,
         val error: String? = null,
     )
 
@@ -246,46 +248,55 @@ class AudioEngine(private val ctx: Context) {
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
 
-            val out = ShortArray(chunkFrames)
             val tmp = ShortArray(chunkFrames)
             track.play()
 
+            var underruns = 0
+            var drops = 0
             var sinceUpdate = 0
+            var starvedChunks = 0
+
             while (running) {
                 val got = ring.read(tmp, chunkFrames)
                 val fill = ring.available()
-                val err = fill - targetFrames
-
-                // Gentle drift correction: nudge by a quarter of the error per chunk
-                // instead of hard-skipping, which is what causes clicks.
-                var usable = chunkFrames
-                if (err > tolerance) {
-                    usable = max(chunkFrames / 2, chunkFrames - (err / 4))
-                }
 
                 if (got <= 0) {
-                    out[0] = 0
-                    java.util.Arrays.fill(out, 0, chunkFrames, 0)
-                } else {
-                    System.arraycopy(tmp, 0, out, 0, min(got, usable))
-                    val last = out[min(got, usable) - 1]
-                    // Hold the final sample rather than inserting silence. A repeated
-                    // sample is far less audible than a gap in the stream.
-                    for (i in min(got, usable) until chunkFrames) out[i] = last
+                    starvedChunks++
+                    if (starvedChunks > 3) {
+                        // Genuinely out of audio. A short burst of silence is the least
+                        // bad option — much better than DC-hold padding or a hard skip.
+                        java.util.Arrays.fill(tmp, 0, chunkFrames, 0)
+                        track.write(tmp, 0, chunkFrames, AudioTrack.WRITE_BLOCKING)
+                        underruns++
+                    }
+                    continue
+                }
+                starvedChunks = 0
+
+                // If the buffer has crept above target, discard the excess from the
+                // oldest end. Done here, before playback, so no chunk is ever cut in
+                // the middle and nothing has to be padded afterwards.
+                val excess = fill - targetFrames
+                if (excess > tolerance) {
+                    ring.skip(excess / 2)
+                    drops++
                 }
 
-                if (muted) java.util.Arrays.fill(out, 0, chunkFrames, 0)
-
-                track.write(out, 0, chunkFrames, AudioTrack.WRITE_BLOCKING)
+                // Write exactly what we have. Never pad, never repeat the last sample:
+                // both of those distort the signal. AudioTrack's own buffer absorbs
+                // the chunk-size variation, and pacing comes from WRITE_BLOCKING.
+                track.write(tmp, 0, got, AudioTrack.WRITE_BLOCKING)
 
                 sinceUpdate++
                 if (sinceUpdate >= 5) {
                     sinceUpdate = 0
                     var peak = 0
-                    for (i in 0 until chunkFrames) peak = max(peak, abs(out[i].toInt()))
+                    for (i in 0 until got) peak = max(peak, abs(tmp[i].toInt()))
                     current = current.copy(
-                        bufferLatencyMs = fill * 1000f / rate,
+                        bufferLatencyMs = ring.available() * 1000f / rate,
                         level = min(1f, (peak / 32768f) * 4f),
+                        underruns = underruns,
+                        driftDrops = drops,
                         error = null,
                     )
                     emit(current)
