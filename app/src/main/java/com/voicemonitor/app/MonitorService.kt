@@ -39,7 +39,7 @@ class MonitorService : Service() {
             ACTION_MUTE -> {
                 muted = !muted
                 engine?.setMuted(muted)
-                notify()
+                updateNotification()
                 return START_STICKY
             }
         }
@@ -64,7 +64,7 @@ class MonitorService : Service() {
                     override fun onState(s: AudioEngine.State) {
                         lastState = s
                         MonitorBus.publish(s)
-                        notify()
+                        updateNotification()
                     }
                 })
                 e.start(mode)
@@ -107,7 +107,7 @@ class MonitorService : Service() {
         m.createNotificationChannel(ch)
     }
 
-    private fun notify() {
+    private fun updateNotification() {
         runCatching {
             getSystemService(NotificationManager::class.java)
                 .notify(NOTIF_ID, buildNotification())
