@@ -64,7 +64,14 @@ class MonitorService : Service() {
                     override fun onState(s: AudioEngine.State) {
                         lastState = s
                         MonitorBus.publish(s)
-                        updateNotification()
+                        // Rebuilding a notification is expensive enough that doing it
+                        // at audio rate visibly starves playback. Only refresh it when
+                        // something the user would actually read has changed.
+                        val key = "${s.running}|${s.muted}|${s.mode}|${s.error != null}"
+                        if (key != lastNotifKey) {
+                            lastNotifKey = key
+                            updateNotification()
+                        }
                     }
                 })
                 e.start(mode)
@@ -75,6 +82,7 @@ class MonitorService : Service() {
     }
 
     private var lastState = AudioEngine.State()
+    private var lastNotifKey = ""
 
     private fun stopEverything() {
         MonitorBus.publish(AudioEngine.State())

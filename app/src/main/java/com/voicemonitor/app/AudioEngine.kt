@@ -80,6 +80,16 @@ class AudioEngine(private val ctx: Context) {
         // every Bluetooth encoder stall on the capture side became an audible gap.
         val ring = RingBuffer(preferredRate / 3)   // ~330 ms of headroom
 
+        // A freshly engaged Bluetooth route needs a moment to actually negotiate.
+        // Capturing during that handshake is what made the first second sound robotic.
+        if (usingSco) {
+            val settleUntil = System.currentTimeMillis() + 700
+            while (System.currentTimeMillis() < settleUntil) {
+                runCatching { Thread.sleep(60) }
+                if (!running) return
+            }
+        }
+
         playThread = Thread({
             Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
             playLoop(ring, preferredRate, usage, contentType)
@@ -288,10 +298,20 @@ class AudioEngine(private val ctx: Context) {
                 track.write(tmp, 0, got, AudioTrack.WRITE_BLOCKING)
 
                 sinceUpdate++
-                if (sinceUpdate >= 5) {
+                // Throttle hard. Every emit used to trigger a notification rebuild,
+                // a UI thread hop and string formatting, all at ~50Hz, which starved
+                // this audio thread. 10Hz is plenty for a level meter.
+                if (sinceUpdate >= 10) {
                     sinceUpdate = 0
                     var peak = 0
-                    for (i in 0 until got) peak = max(peak, abs(tmp[i].toInt()))
+                    // Every 4th sample is plenty for a visual meter and costs a quarter
+                    // of the CPU on the thread that must not miss deadlines.
+                    var i = 0
+                    while (i < got) {
+                        val v = abs(tmp[i].toInt())
+                        if (v > peak) peak = v
+                        i += 4
+                    }
                     current = current.copy(
                         bufferLatencyMs = ring.available() * 1000f / rate,
                         level = min(1f, (peak / 32768f) * 4f),
