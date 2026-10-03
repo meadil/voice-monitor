@@ -2,137 +2,120 @@ package com.voicemonitor.app
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.media.AudioDeviceInfo
-import android.media.AudioManager
-import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.voicemonitor.app.databinding.ActivityMainBinding
 
 /**
- * Stage 1 diagnostic.
- *
- * This app deliberately does NOT stream audio yet. Its only job is to find out
- * which audio routes Android will actually give us on this phone + these earbuds,
- * so that Stage 2 does not silently fall back to telephone-quality HFP audio.
+ * One big button. Tap once, put the phone down, talk.
  */
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), MonitorBus.Observer {
 
     private lateinit var binding: ActivityMainBinding
-
-    private val audio: AudioManager
-        get() = getSystemService(AUDIO_SERVICE) as AudioManager
+    private var serviceRunning = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.scanButton.setOnClickListener { scan() }
-        binding.copyButton.setOnClickListener {
-            val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("diag", binding.output.text.toString()))
-            binding.copyButton.text = "COPIED"
+        binding.modeGroup.setOnCheckedChangeListener { _, id ->
+            if (!serviceRunning) {
+                binding.modeHint.text = when (id) {
+                    binding.rbAuto.id -> "Auto — picks the lowest-latency route available"
+                    binding.rbLow.id -> "Low latency — SCO, thinner audio, ~40–80 ms"
+                    else -> "Full quality — A2DP, better audio, ~150–250 ms"
+                }
+            }
+        }
+
+        binding.toggleButton.setOnClickListener {
+            if (serviceRunning) stopService() else startService()
+        }
+        binding.muteButton.setOnClickListener {
+            if (serviceRunning) MonitorService.toggleMute(this)
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (hasPermission()) scan() else report("Grant BLUETOOTH_CONNECT to continue.")
+    private fun currentMode(): MonitorMode = when (binding.modeGroup.checkedRadioButtonId) {
+        binding.rbLow.id -> MonitorMode.LOW_LATENCY
+        binding.rbQuality.id -> MonitorMode.QUALITY
+        else -> MonitorMode.AUTO
     }
 
-    private fun hasPermission() =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
-            PackageManager.PERMISSION_GRANTED
-
-    private fun report(line: String) {
-        Log.i(TAG, line)
-        binding.output.append(line + "\n\n")
-    }
-
-    private fun scan() {
-        binding.output.text = ""
-        if (!hasPermission()) {
-            report("Grant BLUETOOTH_CONNECT to continue.")
-            binding.scanButton.setOnClickListener { requestPerms() }
+    private fun startService() {
+        if (!hasMic()) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
             return
         }
-
-        report("=== DEVICE ===")
-        report("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
-        report("Manufacturer: ${Build.MANUFACTURER} ${Build.MODEL}")
-
-        report("=== LE AUDIO SUPPORT ===")
-        report("FEATURE_BLUETOOTH_LE:        ${has(PM_BT_LE)}")
-        report("FEATURE_BLUETOOTH_LE_AUDIO: ${has(PM_BT_LE_AUDIO)}")
-
-        report("=== OUTPUT DEVICES ===")
-        audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).forEach { d ->
-            report(describe(d, "OUT"))
+        if (!hasNotif()) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2)
         }
-
-        report("=== INPUT DEVICES ===")
-        audio.getDevices(AudioManager.GET_DEVICES_INPUTS).forEach { d ->
-            report(describe(d, "IN "))
-        }
-
-        report("=== AVAILABLE COMMUNICATION DEVICES ===")
-        val comm = audio.availableCommunicationDevices
-        if (comm.isEmpty()) {
-            report("(none — this means the earbuds are not exposing a mic/HFP profile)")
-        }
-        comm.forEach { d -> report(describe(d, "COM")) }
-
-        report("=== CURRENT COMMUNICATION DEVICE ===")
-        report(describe(audio.communicationDevice, "NOW"))
-
-        report("=== OUTPUT LATENCY ===")
-        report("reported output latency: ${audio.getProperty(PROP_OUTPUT_LATENCY)} ms")
+        serviceRunning = true
+        binding.toggleButton.text = "STOP"
+        binding.toggleButton.setBackgroundColor(0xFFB3261E.toInt())
+        binding.modeGroup.isEnabled = false
+        MonitorService.start(this, currentMode(), false)
     }
 
-    private fun requestPerms() {
-        requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), 1)
+    private fun stopService() {
+        MonitorService.stop(this)
+        serviceRunning = false
+        binding.toggleButton.text = "START"
+        binding.toggleButton.setBackgroundColor(0xFF1B6C3A.toInt())
+        binding.modeGroup.isEnabled = true
     }
 
-    private fun has(feature: String) =
-        runCatching { packageManager.hasSystemFeature(feature) }.getOrDefault(false)
+    private fun hasMic() = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
 
-    private fun describe(d: AudioDeviceInfo?, tag: String): String {
-        if (d == null) return "$tag (none)"
-        val rates = d.sampleRates.takeIf { it.isNotEmpty() }?.joinToString("/") ?: "?"
-        return buildString {
-            append("$tag ${typeName(d.type)}\n")
-            append("      product='${d.productName}' addr=${d.address}\n")
-            append("      id=${d.id} sampleRates=$rates channels=${d.channelCounts.joinToString("/")}")
-            if (d.type == AudioDeviceInfo.TYPE_BLE_HEADSET) {
-                append("\n      >>> LE AUDIO HEADSET <<<")
+    private fun hasNotif() =
+            android.os.Build.VERSION.SDK_INT < 33 ||
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+                    PackageManager.PERMISSION_GRANTED
+
+    override fun onStart() {
+        super.onStart()
+        MonitorBus.add(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        MonitorBus.remove(this)
+    }
+
+    override fun onState(state: AudioEngine.State) {
+        runOnUiThread {
+            serviceRunning = state.running || state.mode.isNotEmpty()
+            binding.status.text = state.error ?: when {
+                !state.running && state.mode.isEmpty() -> "Ready"
+                !state.running -> "Stopped"
+                else -> "Listening — ${state.mode}"
             }
-            if (d.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
-                append("\n      (classic HFP — narrowband telephone audio)")
+            binding.latency.text = if (state.running && state.actualSampleRate > 0) {
+                "buffer %.0f ms · %d Hz".format(state.bufferLatencyMs, state.actualSampleRate)
+            } else {
+                "—"
+            }
+            binding.level.progress = (state.level * 100).toInt()
+
+            if (state.running && state.muted) {
+                binding.muteButton.text = "UNMUTE"
+                binding.muteButton.isEnabled = true
+            } else if (state.running) {
+                binding.muteButton.text = "MUTE"
+                binding.muteButton.isEnabled = true
+            } else {
+                binding.muteButton.text = "MUTE"
+                binding.muteButton.isEnabled = false
             }
         }
     }
 
-    private fun typeName(t: Int) = when (t) {
-        AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "BUILTIN_EARPIECE"
-        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "BUILTIN_SPEAKER"
-        AudioDeviceInfo.TYPE_WIRED_HEADSET -> "WIRED_HEADSET"
-        AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> "WIRED_HEADPHONES"
-        AudioDeviceInfo.TYPE_USB_HEADSET -> "USB_HEADSET"
-        AudioDeviceInfo.TYPE_USB_DEVICE -> "USB_DEVICE"
-        AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "BLUETOOTH_SCO"
-        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> "BLUETOOTH_A2DP"
-        AudioDeviceInfo.TYPE_BLE_HEADSET -> "BLE_HEADSET"
-        AudioDeviceInfo.TYPE_BLE_SPEAKER -> "BLE_SPEAKER"
-        else -> "TYPE_$t"
-    }
-
-    companion object {
-        private const val TAG = "VoiceMonitorDiag"
-        private const val PM_BT_LE = "android.hardware.bluetooth_le"
-        private const val PM_BT_LE_AUDIO = "android.hardware.bluetooth_le_audio"
-        private const val PROP_OUTPUT_LATENCY = "android.media.property.OUTPUT_LATENCY"
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1 && hasMic()) startService()
     }
 }
