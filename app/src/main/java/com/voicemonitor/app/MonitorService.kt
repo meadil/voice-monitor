@@ -60,11 +60,13 @@ class MonitorService : Service() {
         if (engine == null) {
             lastState = MonitorBus.state
             engine = AudioEngine(this).also { e ->
-                e.setListener { s ->
-                    lastState = s
-                    MonitorBus.publish(s)
-                    notify()
-                }
+                e.setListener(object : AudioEngine.Listener {
+                    override fun onState(s: AudioEngine.State) {
+                        lastState = s
+                        MonitorBus.publish(s)
+                        notify()
+                    }
+                })
                 e.start(mode)
                 e.setMuted(muted)
             }
