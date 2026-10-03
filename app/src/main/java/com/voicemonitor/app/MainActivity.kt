@@ -89,7 +89,7 @@ class MainActivity : AppCompatActivity() {
         report(describe(audio.communicationDevice, "NOW"))
 
         report("=== OUTPUT LATENCY ===")
-        report("reported output latency: ${audio.getProperty(AudioManager.PROPERTY_OUTPUT_LATENCY)} ms")
+        report("reported output latency: ${audio.getProperty(PROP_OUTPUT_LATENCY)} ms")
     }
 
     private fun requestPerms() {
@@ -102,11 +102,10 @@ class MainActivity : AppCompatActivity() {
     private fun describe(d: AudioDeviceInfo?, tag: String): String {
         if (d == null) return "$tag (none)"
         val rates = d.sampleRates.takeIf { it.isNotEmpty() }?.joinToString("/") ?: "?"
-        val outCh = d.channelCounts.count { it == AudioDeviceInfo.CHANNEL_COUNT_OUT }
         return buildString {
             append("$tag ${typeName(d.type)}\n")
             append("      product='${d.productName}' addr=${d.address}\n")
-            append("      id=${d.id} sampleRates=$rates outChannels=$outCh")
+            append("      id=${d.id} sampleRates=$rates channels=${d.channelCounts.joinToString("/")}")
             if (d.type == AudioDeviceInfo.TYPE_BLE_HEADSET) {
                 append("\n      >>> LE AUDIO HEADSET <<<")
             }
@@ -134,5 +133,6 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "VoiceMonitorDiag"
         private const val PM_BT_LE = "android.hardware.bluetooth_le"
         private const val PM_BT_LE_AUDIO = "android.hardware.bluetooth_le_audio"
+        private const val PROP_OUTPUT_LATENCY = "android.media.property.OUTPUT_LATENCY"
     }
 }
