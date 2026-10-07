@@ -260,10 +260,9 @@ class AudioEngine(private val ctx: Context) {
                 .setBufferSizeInBytes(trackBuf)
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+                // Ask the HAL for the shortest path it can manage.
+                .setSmallBufferSizeHint(chunkFrames * 2)
                 .build()
-
-            // Tell the HAL we want the shortest path it can manage.
-            runCatching { track.setSmallBufferSizeHint(chunkFrames * 2) }
 
             val tmp = ShortArray(chunkFrames)
             track.play()
