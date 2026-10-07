@@ -243,7 +243,7 @@ class AudioEngine(private val ctx: Context) {
             // each other, and ask the HAL for its low-latency path.
             val trackBuf = max(minOut, chunkFrames * 4 * 2)
 
-            track = AudioTrack.Builder()
+            val t = AudioTrack.Builder()
                 .setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(usage)
@@ -259,13 +259,13 @@ class AudioEngine(private val ctx: Context) {
                 )
                 .setBufferSizeInBytes(trackBuf)
                 .setTransferMode(AudioTrack.MODE_STREAM)
+                // Ask the HAL for its lowest-latency path.
                 .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
-                // Ask the HAL for the shortest path it can manage.
-                .setSmallBufferSizeHint(chunkFrames * 2)
                 .build()
+            track = t
 
             val tmp = ShortArray(chunkFrames)
-            track.play()
+            t.play()
 
             var underruns = 0
             var drops = 0
@@ -282,7 +282,7 @@ class AudioEngine(private val ctx: Context) {
                         // Genuinely out of audio. A short burst of silence is the least
                         // bad option — much better than DC-hold padding or a hard skip.
                         java.util.Arrays.fill(tmp, 0, chunkFrames, 0)
-                        track.write(tmp, 0, chunkFrames, AudioTrack.WRITE_BLOCKING)
+                        t.write(tmp, 0, chunkFrames, AudioTrack.WRITE_BLOCKING)
                         underruns++
                     }
                     continue
@@ -301,7 +301,7 @@ class AudioEngine(private val ctx: Context) {
                 // Write exactly what we have. Never pad, never repeat the last sample:
                 // both of those distort the signal. AudioTrack's own buffer absorbs
                 // the chunk-size variation, and pacing comes from WRITE_BLOCKING.
-                track.write(tmp, 0, got, AudioTrack.WRITE_BLOCKING)
+                t.write(tmp, 0, got, AudioTrack.WRITE_BLOCKING)
 
                 sinceUpdate++
                 // Throttle hard. Every emit used to trigger a notification rebuild,
