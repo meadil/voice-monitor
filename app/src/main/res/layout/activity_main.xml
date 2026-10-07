@@ -24,84 +24,141 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:paddingTop="4dp"
-            android:paddingBottom="16dp"
-            android:text="—"
+            android:paddingBottom="14dp"
             android:textColor="#00FF88"
-            android:textSize="13sp" />
+            android:textSize="12sp" />
 
         <Button
             android:id="@+id/toggleButton"
             android:layout_width="match_parent"
-            android:layout_height="96dp"
+            android:layout_height="84dp"
             android:background="#1B6C3A"
             android:text="START"
             android:textColor="#FFFFFF"
-            android:textSize="30sp"
+            android:textSize="28sp"
             android:textStyle="bold" />
 
         <ProgressBar
             android:id="@+id/level"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
-            android:layout_height="14dp"
-            android:layout_marginTop="20dp"
+            android:layout_height="10dp"
+            android:layout_marginTop="14dp"
             android:max="100" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingTop="8dp"
-            android:text="input level"
-            android:textColor="#666666"
-            android:textSize="11sp" />
 
         <Button
             android:id="@+id/muteButton"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginTop="20dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="14dp"
             android:enabled="false"
-            android:text="MUTE"
-            android:textSize="16sp" />
+            android:text="MUTE" />
 
-        <RadioGroup
-            android:id="@+id/modeGroup"
+        <View
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="1dp"
             android:layout_marginTop="24dp"
-            android:orientation="vertical">
-
-            <RadioButton
-                android:id="@+id/rbAuto"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:text="Auto"
-                android:textColor="#FFFFFF" />
-
-            <RadioButton
-                android:id="@+id/rbLow"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Low latency (SCO)"
-                android:textColor="#FFFFFF" />
-
-            <RadioButton
-                android:id="@+id/rbQuality"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Full quality (A2DP)"
-                android:textColor="#FFFFFF" />
-        </RadioGroup>
+            android:layout_marginBottom="16dp"
+            android:background="#333333" />
 
         <TextView
-            android:id="@+id/modeHint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingTop="6dp"
-            android:paddingBottom="24dp"
-            android:text="Auto — picks the lowest-latency route available"
+            android:paddingBottom="8dp"
+            android:text="SHADOWING — load a native-speaker clip and repeat over it"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/pickButton"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="CHOOSE AUDIO FILE" />
+
+        <TextView
+            android:id="@+id/loadStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="8dp"
+            android:text="No clip loaded."
             android:textColor="#888888"
             android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/playButton"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:layout_marginTop="12dp"
+            android:enabled="false"
+            android:text="PLAY"
+            android:textSize="20sp" />
+
+        <SeekBar
+            android:id="@+id/seekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:max="1000" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/backButton"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:text="-5s" />
+
+            <Button
+                android:id="@+id/forwardButton"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="+5s" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/timeLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="4dp"
+            android:textColor="#888888"
+            android:textSize="12sp" />
+
+        <CheckBox
+            android:id="@+id/loopCheck"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="Loop clip"
+            android:textColor="#FFFFFF" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Model volume"
+            android:textColor="#888888"
+            android:textSize="12sp" />
+
+        <SeekBar
+            android:id="@+id/modelVolume"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="60" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="20dp"
+            android:paddingBottom="24dp"
+            android:text="Tip: a USB-C DAC dongle gives the lowest delay and full audio quality. Plug it in and the app switches to it automatically."
+            android:textColor="#666666"
+            android:textSize="11sp" />
     </LinearLayout>
 </ScrollView>

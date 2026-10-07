@@ -19,6 +19,10 @@ object MonitorBus {
     var state: AudioEngine.State = AudioEngine.State()
         private set
 
+    /** Owned by the running engine; lets the activity drive shadowing controls. */
+    @Volatile
+    var shadow: ShadowPlayer? = null
+
     fun add(o: Observer) {
         observers.addIfAbsent(o)
         o.onState(state)

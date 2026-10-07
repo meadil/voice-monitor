@@ -49,6 +49,16 @@ class AudioEngine(private val ctx: Context) {
     private var listener: Listener? = null
     private var current = State()
 
+    val shadow = ShadowPlayer()
+
+    private fun hasWiredOutput(): Boolean =
+        audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any {
+            it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_USB_DEVICE
+        }
+
     private val audio: AudioManager
         get() = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
@@ -71,7 +81,7 @@ class AudioEngine(private val ctx: Context) {
         savedAudioMode = audio.mode
         if (usingSco) engageScoRoute() else restoreNormalRoute()
 
-        val label = if (usingSco) "SCO (low latency)" else "A2DP (full quality)"
+        val label = if (usingSco) "SCO (low latency)" else "${if (hasWiredOutput()) "Wired/Dongle" else "A2DP"} (full quality)"
         running = true
         current = State(running = true, mode = label)
         emit(current)
@@ -103,13 +113,23 @@ class AudioEngine(private val ctx: Context) {
 
     @SuppressLint("MissingPermission")
     private fun resolveMode(requested: MonitorMode): MonitorMode? {
+        val outs = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        // A wired or USB-C headset (a cheap DAC dongle, for example) is the only
+        // route on this app that is both low latency and full quality. Always prefer
+        // it when present: over Bluetooth there is no software fix for the delay.
+        val hasWired = outs.any {
+            it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_USB_DEVICE
+        }
         val hasSco = audio.availableCommunicationDevices.any { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO }
-        val hasA2dp = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-            .any { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP }
+        val hasA2dp = outs.any { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP }
         return when (requested) {
-            MonitorMode.QUALITY -> if (hasA2dp) MonitorMode.QUALITY else null
+            MonitorMode.QUALITY -> if (hasA2dp || hasWired) MonitorMode.QUALITY else null
             MonitorMode.LOW_LATENCY -> if (hasSco) MonitorMode.LOW_LATENCY else null
             MonitorMode.AUTO -> when {
+                hasWired -> MonitorMode.QUALITY
                 hasSco -> MonitorMode.LOW_LATENCY
                 hasA2dp -> MonitorMode.QUALITY
                 else -> null
@@ -231,6 +251,7 @@ class AudioEngine(private val ctx: Context) {
                 Thread.sleep(20)
             }
             rate = current.actualSampleRate.takeIf { it > 0 } ?: preferredRate
+            shadow.setEngineRate(rate)
 
             // 5 ms chunks, 30 ms target. Every millisecond of buffer here is a
             // millisecond you hear yourself late, so these are deliberately tight.
@@ -297,6 +318,10 @@ class AudioEngine(private val ctx: Context) {
                     ring.skip(excess / 2)
                     drops++
                 }
+
+                // Mix the model track in here, on the same sample block, so the native
+                // speaker and your own voice are sample-locked and cannot drift.
+                shadow.mixInto(tmp, got)
 
                 // Write exactly what we have. Never pad, never repeat the last sample:
                 // both of those distort the signal. AudioTrack's own buffer absorbs
@@ -372,6 +397,6 @@ class AudioEngine(private val ctx: Context) {
 
     companion object {
         private const val TAG = "VoiceMonitor"
-        private const val TARGET_MS = 30
+        private const val TARGET_MS = 20
     }
 }

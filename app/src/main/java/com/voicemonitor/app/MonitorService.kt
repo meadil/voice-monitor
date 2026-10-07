@@ -77,6 +77,7 @@ class MonitorService : Service() {
                 })
                 e.start(mode)
                 e.setMuted(muted)
+                MonitorBus.shadow = e.shadow
             }
         }
         return START_STICKY
