@@ -82,8 +82,8 @@ class ShadowPlayer {
             var v = dst[i].toInt() + (sample * gain).toInt()
             // Soft clip rather than hard wrap, so a loud overlap distorts gently
             // instead of turning into noise.
-            if (v > Short.MAX_VALUE) v = Short.MAX_VALUE
-            if (v < Short.MIN_VALUE) v = Short.MIN_VALUE
+            if (v > Short.MAX_VALUE.toInt()) v = Short.MAX_VALUE.toInt()
+            if (v < Short.MIN_VALUE.toInt()) v = Short.MIN_VALUE.toInt()
             dst[i] = v.toShort()
             pos += step
         }
