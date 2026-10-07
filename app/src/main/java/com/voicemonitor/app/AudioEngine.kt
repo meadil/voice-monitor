@@ -232,13 +232,16 @@ class AudioEngine(private val ctx: Context) {
             }
             rate = current.actualSampleRate.takeIf { it > 0 } ?: preferredRate
 
-            val chunkFrames = max(128, rate / 100)             // ~10 ms
+            // 5 ms chunks, 30 ms target. Every millisecond of buffer here is a
+            // millisecond you hear yourself late, so these are deliberately tight.
+            val chunkFrames = max(64, rate / 200)
             val targetFrames = rate * TARGET_MS / 1000
-            val tolerance = max(chunkFrames / 2, rate / 200)
+            val tolerance = max(chunkFrames / 2, rate / 400)
 
-            // Bluetooth encoders need a comfortably sized output buffer or they
-            // underrun audibly; 4x the minimum is a good starting point.
-            val trackBuf = max(minOut * 4, chunkFrames * 8 * 2)
+            // A large AudioTrack buffer is simply extra latency. Keep it modest now
+            // that capture and playback run on separate threads and cannot starve
+            // each other, and ask the HAL for its low-latency path.
+            val trackBuf = max(minOut, chunkFrames * 4 * 2)
 
             track = AudioTrack.Builder()
                 .setAudioAttributes(
@@ -256,7 +259,11 @@ class AudioEngine(private val ctx: Context) {
                 )
                 .setBufferSizeInBytes(trackBuf)
                 .setTransferMode(AudioTrack.MODE_STREAM)
+                .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                 .build()
+
+            // Tell the HAL we want the shortest path it can manage.
+            runCatching { track.setSmallBufferSizeHint(chunkFrames * 2) }
 
             val tmp = ShortArray(chunkFrames)
             track.play()
@@ -366,6 +373,6 @@ class AudioEngine(private val ctx: Context) {
 
     companion object {
         private const val TAG = "VoiceMonitor"
-        private const val TARGET_MS = 60
+        private const val TARGET_MS = 30
     }
 }

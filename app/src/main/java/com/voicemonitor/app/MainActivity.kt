@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.voicemonitor.app.databinding.ActivityMainBinding
@@ -56,8 +57,15 @@ class MainActivity : AppCompatActivity(), MonitorBus.Observer {
         serviceRunning = true
         binding.toggleButton.text = "STOP"
         binding.toggleButton.setBackgroundColor(0xFFB3261E.toInt())
-        binding.modeGroup.isEnabled = false
         MonitorService.start(this, currentMode(), false)
+
+        // With the screen lit, this app's own rendering was measurably starving the
+        // audio thread: hundreds of gaps, half-delivered words. Rather than tune the
+        // UI, we get out of the way completely. No window means nothing to render,
+        // so audio quality no longer depends on whether the screen is on.
+        // Stop and Mute live on the notification; tapping it reopens this screen.
+        Toast.makeText(this, "Monitoring. Stop or Mute from the notification.", Toast.LENGTH_LONG).show()
+        finish()
     }
 
     private fun stopService() {

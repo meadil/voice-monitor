@@ -67,7 +67,8 @@ class MonitorService : Service() {
                         // Rebuilding a notification is expensive enough that doing it
                         // at audio rate visibly starves playback. Only refresh it when
                         // something the user would actually read has changed.
-                        val key = "${s.running}|${s.muted}|${s.mode}|${s.error != null}"
+                        val key = "${s.running}|${s.muted}|${s.mode}|${s.error != null}|" +
+                                "${(s.bufferLatencyMs / 10).toInt()}|${s.underruns / 25}"
                         if (key != lastNotifKey) {
                             lastNotifKey = key
                             updateNotification()
@@ -144,7 +145,7 @@ class MonitorService : Service() {
             lastState.error != null -> lastState.error
             !lastState.running -> "Starting…"
             lastState.muted -> "Muted — still listening"
-            else -> "${lastState.mode} · ${"%.0f".format(lastState.bufferLatencyMs)} ms buffer"
+            else -> "${lastState.mode} · ${"%.0f".format(lastState.bufferLatencyMs)} ms buffer · ${lastState.underruns} gaps"
         }
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
